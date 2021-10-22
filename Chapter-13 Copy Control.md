@@ -269,7 +269,7 @@ b=a;  // 将a赋值b
 
 
 
-## 拷贝控制和资源管理（Copy Control and Resource Management）
+## 2. 拷贝控制和资源管理（Copy Control and Resource Management）
 
 通常，管理类外资源的类必须定义拷贝控制成员。拷贝操作有两种，使得类的行为像一个值或者像一个指针。
 
@@ -277,7 +277,7 @@ b=a;  // 将a赋值b
 
 类行为像指针，当拷贝该类的对象时，副本和原对象使用相同的底层数据，改变副本也会改变原对象，即该类所有的对象共享状态
 
-### 行为像值的类（Classes That Act Like Values）
+### 2.1 行为像值的类（Classes That Act Like Values）
 
 ```C++
 class HasPtr
@@ -302,7 +302,7 @@ private:
 - 即使将一个对象赋予它自身，赋值运算符也能正确工作。
 
   ```c++
-  // WRONG way to write an assignment operator!
+  // 这样编写赋值运算符是错误的，处理不了自赋值
   HasPtr& HasPtr::operator=(const HasPtr &rhs)
   {
       delete ps;   // frees the string to which this object points
@@ -328,7 +328,18 @@ private:
   }
   ```
 
-### 定义行为像指针的类（Defining Classes That Act Like Pointers）
+### 2.2 定义行为像指针的类（Defining Classes That Act Like Pointers）
+
+对于行为像指针的类，需要定义拷贝构造函数和拷贝赋值运算符，来拷贝指针成员而不是内容
+
+另一个类展现类似指针的行为的最好方法是使用shared_ptr来管理类中的资源，如果希望直接管理资源，可以使用**引用计数**：
+
+- 每个构造函数（除了拷贝构造函数）要创建一个引用计数
+- 对于拷贝构造函数：递增共享的计数器
+- 对于析构函数：递减计数器，如果计数器变为0，析构函数销毁状态
+- 对于拷贝赋值运算符：递增右边运算对象的计数器，递减左边运算对象的计数器
+
+可将计数器保存在动态内存中，拷贝指向计数器的指针
 
 ```c++
 class HasPtr
@@ -362,6 +373,7 @@ HasPtr::~HasPtr()
     }
 }
 
+// 赋值运算符必须考虑自赋值：先递增rhs中的计数器，再递减左侧运算对象
 HasPtr& HasPtr::operator=(const HasPtr &rhs)
 {
     ++*rhs.use;    // increment the use count of the right-hand operand
@@ -377,7 +389,7 @@ HasPtr& HasPtr::operator=(const HasPtr &rhs)
 }
 ```
 
-## 交换操作（Swap）
+## 3. 交换操作（Swap）
 
 通常，管理类外资源的类会定义`swap`函数。如果一个类定义了自己的`swap`函数，算法将使用自定义版本，否则将使用标准库定义的`swap`。
 
@@ -431,15 +443,15 @@ HasPtr& HasPtr::operator=(HasPtr rhs)
 }
 ```
 
-## 拷贝控制示例（A Copy-Control Example）
+## 4. 拷贝控制示例（A Copy-Control Example）
 
 拷贝赋值运算符通常结合了拷贝构造函数和析构函数的工作。在这种情况下，公共部分应该放在`private`的工具函数中完成。
 
-## 动态内存管理类（Classes That Manage Dynamic Memory）
+## 5. 动态内存管理类（Classes That Manage Dynamic Memory）
 
 移动构造函数通常是将资源从给定对象“移动”而不是拷贝到正在创建的对象中。
 
-## 对象移动（Moving Objects）
+## 6. 对象移动（Moving Objects）
 
 某些情况下，一个对象拷贝后就立即被销毁了，此时移动而非拷贝对象会大幅度提高性能。
 
@@ -447,7 +459,7 @@ HasPtr& HasPtr::operator=(HasPtr rhs)
 
 标准库容器、`string`和`shared_ptr`类既支持移动也支持拷贝。IO类和`unique_ptr`类可以移动但不能拷贝。
 
-### 右值引用（Rvalue Reference）
+### 6.1 右值引用（Rvalue Reference）
 
 为了支持移动操作，C++11引入了右值引用类型。右值引用就是必须绑定到右值的引用。可以通过`&&`来获得右值引用。
 
@@ -477,7 +489,7 @@ int &&rr3 = std::move(rr1);
 
 调用`move`函数的代码应该使用`std::move`而非`move`，这样做可以避免潜在的名字冲突。
 
-### 移动构造函数和移动赋值运算符（Move Constructor and Move Assignment）
+### 6.2 移动构造函数和移动赋值运算符（Move Constructor and Move Assignment）
 
 移动构造函数的第一个参数是该类类型的右值引用，其他任何额外参数都必须有默认值。
 
@@ -585,7 +597,7 @@ C++11标准库定义了移动迭代器（move iterator）适配器。一个移�
 
 最好不要在移动构造函数和移动赋值运算符这些类实现代码之外的地方随意使用`move`操作。
 
-### 右值引用和成员函数（Rvalue References and Member Functions）
+### 6.3 右值引用和成员函数（Rvalue References and Member Functions）
 
 区分移动和拷贝的重载函数通常有一个版本接受一个`const T&`参数，另一个版本接受一个`T&&`参数（*T*为类型）。
 
