@@ -391,46 +391,48 @@ HasPtr& HasPtr::operator=(const HasPtr &rhs)
 
 ## 3. 交换操作（Swap）
 
-通常，管理类外资源的类会定义`swap`函数。如果一个类定义了自己的`swap`函数，算法将使用自定义版本，否则将使用标准库定义的`swap`。
+与拷贝控制成员不同，`swap`函数并不是必要的。对于分配了资源的类，定义`swap`函数是一种很重要的优化手段。
+
+如果一个类定义了自己的`swap`函数，算法将使用自定义版本，否则将使用标准库定义的`swap`。
 
 ```c++
 class HasPtr
 {
-    friend void swap(HasPtr&, HasPtr&);
+    friend void swap(HasPtr&, HasPtr&);  // friend，以便访问类内数据成员
     // other members as in § 13.2.1 (p. 511)
 };
 
-inline void swap(HasPtr &lhs, HasPtr &rhs)
+// 由于`swap`函数的存在就是为了优化代码，所以一般将其声明为内联函数。
+inline void swap(HasPtr &lhs, HasPtr &rhs) 
 {
-    using std::swap;
+    using std::swap; // 数据成员是内置类型，内置类型没有特定版本的swap，所以会调用std::swap
     swap(lhs.ps, rhs.ps);   // swap the pointers, not the string data
     swap(lhs.i, rhs.i);     // swap the int members
 }
 ```
 
-一些算法在交换两个元素时会调用`swap`函数，其中每个`swap`调用都应该是未加限定的。如果存在类型特定的`swap`版本，其匹配程度会优于*std*中定义的版本（假定作用域中有`using`声明）。
+**swap和std::swap**：一些算法在交换两个元素时会调用`swap`函数，其中每个`swap`调用都应该是未加限定的。如果存在类型特定的`swap`版本，其匹配程度会优于*std*中定义的版本（假定作用域中有`using`声明）。
 
 ```c++
+// 下面错误
 void swap(Foo &lhs, Foo &rhs)
 {
     // WRONG: this function uses the library version of swap, not the HasPtr version
+    // 标准swap对HasPtr管理的string进行了不必要拷贝
     std::swap(lhs.h, rhs.h);
     // swap other members of type Foo
 }
 
+// 下面正确
 void swap(Foo &lhs, Foo &rhs)
 {
-    using std::swap;
+    using std::swap; 
     swap(lhs.h, rhs.h);  // uses the HasPtr version of swap
     // swap other members of type Foo
 }
 ```
 
-与拷贝控制成员不同，`swap`函数并不是必要的。但是对于分配了资源的类，定义`swap`可能是一种重要的优化手段。
-
-由于`swap`函数的存在就是为了优化代码，所以一般将其声明为内联函数。
-
-定义了`swap`的类通常用`swap`来实现赋值运算符。在这种版本的赋值运算符中，右侧运算对象以值方式传递，然后将左侧运算对象与右侧运算对象的副本进行交换（拷贝并交换，copy and swap）。这种方式可以正确处理自赋值情况。
+**在赋值运算符中使用swap**：定义了`swap`的类通常用`swap`来实现赋值运算符。在这种版本的赋值运算符中，右侧运算对象以值方式传递，然后将左侧运算对象与右侧运算对象的副本进行交换（拷贝并交换，copy and swap）。
 
 ```c++
 // note rhs is passed by value, which means the HasPtr copy constructor
@@ -443,6 +445,8 @@ HasPtr& HasPtr::operator=(HasPtr rhs)
 }
 ```
 
+这种方式可以正确处理自赋值情况。它通过在改变左侧运算对象之前拷贝右侧运算对象保证自赋值情况。
+
 ## 4. 拷贝控制示例（A Copy-Control Example）
 
 拷贝赋值运算符通常结合了拷贝构造函数和析构函数的工作。在这种情况下，公共部分应该放在`private`的工具函数中完成。
@@ -451,11 +455,44 @@ HasPtr& HasPtr::operator=(HasPtr rhs)
 
 移动构造函数通常是将资源从给定对象“移动”而不是拷贝到正在创建的对象中。
 
+**STL:: allocator之deallocate & destory的区别与联系**：
+
+deallocate：
+
+```c++
+	template <class T>
+	inline void _deallocate(T* buffer)
+	{
+		::operator delete(buffer);    //为什么不用 delete [] ?  ,operator delete 区别于 delete 
+		                             //operator delete  是一个底层操作符
+	}
+```
+
+destory：
+
+```c++
+	template <class T>
+	inline void _destory(T *ptr)
+	{
+		ptr->~T();
+	}
+```
+
+destory()负责调用类型的析构函数，销毁相应内存上的内容（但销毁后内存地址仍保留）
+
+destroy()是将已经被构造的空间(已有值) 析构成没有被使用的空间放回内存池
+
+
+
+deallocate()是将分配出的空间(没有被使用的空间) 放回主存。
+
+deallocate()负责释放内存（此时相应内存中的值在此之前应调用destory销毁，将内存地址返回给系统，代表这部分地址使用引用-1）
+
 ## 6. 对象移动（Moving Objects）
 
 某些情况下，一个对象拷贝后就立即被销毁了，此时移动而非拷贝对象会大幅度提高性能。
 
-在旧版本的标准库中，容器所能保存的类型必须是可拷贝的。但在新标准中，可以用容器保存不可拷贝，但可移动的类型。
+在旧版本的标准库中，容器所能保存的类型必须是可拷贝的。但在新标准中，<u>可以用容器保存不可拷贝，但可移动的类型</u>。
 
 标准库容器、`string`和`shared_ptr`类既支持移动也支持拷贝。IO类和`unique_ptr`类可以移动但不能拷贝。
 
@@ -472,19 +509,23 @@ const int &r3 = i * 42;    // ok: we can bind a reference to const to an rvalue
 int &&rr2 = i * 42;        // ok: bind rr2 to the result of the multiplication
 ```
 
-右值引用只能绑定到即将被销毁，并且没有其他用户的临时对象上。使用右值引用的代码可以自由地接管所引用对象的资源。
+返回左值引用：赋值、下标、解引用和前置递增/递减运算符
 
-变量表达式都是左值，所以不能将一个右值引用直接绑定到一个变量上，即使这个变量的类型是右值引用也不行。
+返回右值引用：算术、关系、位和后置递增/递减运算符（可以将一个const的左值引用绑定到这类表达式上，如`const int &r3 = i * 42;`）
+
+左值持久，右值短暂：右值引用只能绑定到即将被销毁，并且没有其他用户的临时对象上。所以使用右值引用的代码可以自由地接管所引用对象的资源。
+
+**变量是左值**，所以不能将一个右值引用直接绑定到一个变量上，即使这个变量的类型是右值引用也不行。
 
 ```c++
 int &&rr1 = 42;     // ok: literals are rvalues
 int &&rr2 = rr1;    // error: the expression rr1 is an lvalue!
 ```
 
-调用`move`函数可以获得绑定在左值上的右值引用，此函数定义在头文件*utility*中。
+**标准库move函数**：调用`move`函数可以<u>获得绑定在左值上的右值引用</u>，此函数定义在头文件*utility*中。move表示——我们有一个左值，但希望像右值一样处理它。
 
 ```c++
-int &&rr3 = std::move(rr1);
+int &&rr3 = std::move(rr1); // 除了对rr1赋值或销毁外，我们将不再使用它，即我们可以销毁一个移后源对象，也可以赋予新值，但不能使用一个移后源对象的值
 ```
 
 调用`move`函数的代码应该使用`std::move`而非`move`，这样做可以避免潜在的名字冲突。
