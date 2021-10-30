@@ -538,7 +538,7 @@ int &&rr3 = std::move(rr1); // 除了对rr1赋值或销毁外，我们将不再�
 
 在函数的形参列表后面添加关键字`noexcept`可以指明该函数不会抛出任何异常。
 
-对于构造函数，`noexcept`位于形参列表和初始化列表开头的冒号之间。在类的头文件声明和定义中（如果定义在类外）都应该指定`noexcept`。
+对于构造函数，`noexcept`位于形参列表和初始化列表开头的冒号之间。<u>在类的头文件声明和定义中（如果定义在类外）都应该指定`noexcept`</u>。
 
 ```c++
 class StrVec
@@ -548,21 +548,26 @@ public:
     // other members as before
 };
 
-StrVec::StrVec(StrVec &&s) noexcept : /* member initializers */
-{ /* constructor body */ }
+StrVec::StrVec(StrVec &&s) noexcept  //不能抛出任何异常
+    // 成员初始化器接管或“窃取”s中的资源
+    : elements(s.elements), first_free(s.first_free), cap(s.cap)
+{
+    // 令s进入这样的状态，对其运行析构函数是安全的（保证移后源对象s可销毁）
+    s.elements = s.first_free = s.cap = nullptr;
+}
 ```
 
-标准库容器能对异常发生时其自身的行为提供保障。虽然移动操作通常不抛出异常，但抛出异常也是允许的。为了安全起见，除非容器确定元素类型的移动操作不会抛出异常，否则在重新分配内存的过程中，它就必须使用拷贝而非移动操作。
+**为什么使用`noexcept`**:标准库容器能对异常发生时其自身的行为提供保障。虽然移动操作通常不抛出异常，但抛出异常也是允许的。为了安全起见，除非容器确定元素类型的移动操作不会抛出异常，否则在重新分配内存的过程中，它就必须使用拷贝而非移动操作。所以如果希望容器在重新分配内存对我们自定义类型的对象进行移动而不是拷贝，就必须显示地告诉标准库我们的移动构造函数可以安全使用，我们通过标记noexpect来做到这一点。
 
-不抛出异常的移动构造函数和移动赋值运算符必须标记为`noexcept`。
+**移动赋值运算符**：移动赋值运算符执行与析构函数和移动构造函数相同的工作，因此必须标记为`noexcept`，并且需正确处理自赋值情况。在移动操作之后，移后源对象必须保持有效的、可销毁的状态，但是用户不能使用它的值。
 
-在移动操作之后，移后源对象必须保持有效的、可销毁的状态，但是用户不能使用它的值。
+移动赋值运算符处理自赋值的关键在于——不能在使用右侧运算对象的资源之前就释放左侧运算对象的资源
 
 ```c++
 StrVec &StrVec::operator=(StrVec &&rhs) noexcept
 {
     // direct test for self-assignment
-    if (this != &rhs)
+    if (this != &rhs) // 避免自赋值
     {
         free();     // free existing elements
         elements = rhs.elements;    // take over resources from rhs
@@ -575,7 +580,9 @@ StrVec &StrVec::operator=(StrVec &&rhs) noexcept
 }
 ```
 
-只有当一个类没有定义任何拷贝控制成员，且类的每个非`static`数据成员都可以移动时，编译器才会为类合成移动构造函数和移动赋值运算符。编译器可以移动内置类型的成员。如果一个成员是类类型，且该类有对应的移动操作，则编译器也能移动该成员。
+**移后源对象必须可析构**：编写移动操作时，必须确保移后源对象进入一个可析构的状态，并且还需要保证移后源对象仍然是有效的（有效是指可以为其赋予新值或者安全使用而不依赖其当前值），但用户不能对其值有任何假设。
+
+**合成的移动操作**：只有当一个类没有定义任何拷贝控制成员，且类的每个非`static`数据成员都可以移动时，编译器才会为类合成移动构造函数和移动赋值运算符。编译器可以移动内置类型的成员。如果一个成员是类类型，且该类有对应的移动操作，则编译器也能移动该成员。
 
 ```c++
 // the compiler will synthesize the move operations for X and hasX
@@ -596,9 +603,7 @@ hasX hx, hx2 = std::move(hx);   // uses the synthesized move constructor
 
 与拷贝操作不同，移动操作永远不会被隐式定义为删除的函数。但如果显式地要求编译器生成`=default`的移动操作，且编译器不能移动全部成员，则移动操作会被定义为删除的函数。
 
-定义了移动构造函数或移动赋值运算符的类必须也定义自己的拷贝操作，否则这些成员会被默认地定义为删除的函数。
-
-如果一个类有可用的拷贝构造函数而没有移动构造函数，则其对象是通过拷贝构造函数来“移动”的，即使调用`move`函数时也是如此。拷贝赋值运算符和移动赋值运算符的情况类似。
+<u>用了move但实际用的是拷贝</u>：如果一个类有可用的拷贝构造函数而没有移动构造函数，则其对象是通过拷贝构造函数来“移动”的，即使调用`move`函数时也是如此。拷贝赋值运算符和移动赋值运算符的情况类似。
 
 ```c++
 class Foo
@@ -611,40 +616,110 @@ public:
 
 Foo x;
 Foo y(x);   // copy constructor; x is an lvalue
-Foo z(std::move(x));    // copy constructor, because there is no move constructor
+Foo z(std::move(x));    // std::move(x) 返回绑定x的Foo&&，可以将一个Foo&&转换为const Foo&，因此初始化z是用的Foo的拷贝构造函数
 ```
 
-使用非引用参数的单一赋值运算符可以实现拷贝赋值和移动赋值两种功能。依赖于实参的类型，左值被拷贝，右值被移动。
+<u>移动和拷贝的相互抑制作用</u>：定义了移动构造函数或移动赋值运算符的类必须也定义自己的拷贝操作，否则这些拷贝成员会被默认地定义为删除的函数。
+
+```c++
+// 假设Y是一个类，定义了自己的拷贝构造函数，不未定义自己的移动构造函数
+struct Y
+{
+    Y() = default;
+    Y(Y &) = default;
+    int x;
+}
+struct hasY
+{
+    hasY() = default;
+    hasY(hasY &&) = default;
+     Y mem; // 因为Y定义拷贝，所以Y没有移动，从而导致hasY的移动也是删除的
+};
+
+hasY hy, hy2 = std::move(hy); // 错误！hasY应该也没有拷贝，因为它定义了移动（但移动又被删除了），所以hasY既没有拷贝，也没有移动？？？（不知道分析对不对，需要实际测试一下）
+
+```
+
+**一个函数实现拷贝赋值和移动赋值**：使用非引用参数的单一赋值运算符可以实现拷贝赋值和移动赋值两种功能。依赖于实参的类型，左值被拷贝，右值被移动。
 
 ```c++
 // assignment operator is both the move- and copy-assignment operator
-HasPtr& operator=(HasPtr rhs)
-{
-    swap(*this, rhs);
-    return *this;
+class HasPtr{
+public:
+    HasPtr(HasPtr &&p) noexpect : ps(p.ps), i(p.i)  
+        { p.ps = 0; }
+    HasPtr& operator=(HasPtr rhs) // 参数是非引用的，此参数要进行拷贝初始化（要么使用拷贝构造，要么使用移动构造）
+    {
+        swap(*this, rhs);
+        return *this;
+    }
 }
 
 hp = hp2;   // hp2 is an lvalue; copy constructor used to copy hp2
-hp = std::move(hp2);    // move constructor moves hp2
+hp = std::move(hp2);    // move constructor moves hp2，函数=的实参std::move(hp2)是右值
 ```
 
 建议将五个拷贝控制成员当成一个整体来对待。如果一个类需要任何一个拷贝操作，它就应该定义所有五个操作。
 
-移动赋值运算符可以直接检查自赋值情况。
+**使用案例：Message类的移动操作**
 
-C++11标准库定义了移动迭代器（move iterator）适配器。一个移动迭代器通过改变给定迭代器的解引用运算符的行为来适配此迭代器。移动迭代器的解引用运算符返回一个右值引用。
+```c++
+// 移动构造函数
+Message(Message &&m):contents(std::move(m.contents))
+{
+    move_Folders(&m);
+}
 
-调用`make_move_iterator`函数能将一个普通迭代器转换成移动迭代器。原迭代器的所有其他操作在移动迭代器中都照常工作。
+// 移动赋值运算符
+Message& operator=(Message &&rhs)
+{
+    if(this != &rhs) // 移动赋值运算符可以直接检查自赋值情况
+    {
+        remove_from_Folders(); // 与任何赋值运算符一样，必须销毁左侧运算对象的旧状态
+        contents = std::move(rhs.contents);
+        move_Folders(&rhs); // 重置Folders指向本message
+    }
+    return *this;
+}
+
+// 从本message移动Folder指针
+void Message::move_Folders(Message *m)
+{
+    // 注意，向set插入元素可能会抛出异常（因为可能涉及分配内存），所以Massage的移动构造和移动赋值可能会抛出异常，没有设置为 `noexcept`
+    folders = std::move(m->folders); // 使用set的移动赋值运算符
+    for(auto f: folders)
+    {
+        f->remMsg(m);
+        f->addMsg(this);
+    }
+    m->folders.clear(); // 确保销毁m是无害的
+}
+
+void Message::remove_from_Folders()
+{
+	for (set<Folder*>::iterator f = folders.begin();
+			f != folders.end(); ++f)  // for each pointer in folders
+		(*f)->remMsg(this);    // remove this Message from that Folder
+	folders.clear();        // no Folder points to this Message
+
+}
+```
+
+**移动迭代器**：C++11标准库定义了移动迭代器（move iterator）适配器。一个移动迭代器通过改变给定迭代器的解引用运算符的行为来适配此迭代器。<u>移动迭代器的解引用运算符返回一个右值引用</u>。
+
+调用`make_move_iterator`函数能将一个普通迭代器转换成移动迭代器。原迭代器的所有其他操作在移动迭代器中都照常工作。用例在c++ primer p480
 
 最好不要在移动构造函数和移动赋值运算符这些类实现代码之外的地方随意使用`move`操作。
 
-### 6.3 右值引用和成员函数（Rvalue References and Member Functions）
+### 6.3 右值引用和成员函数（Rvalue References and Member Functions）（可移动的成员函数）
 
-区分移动和拷贝的重载函数通常有一个版本接受一个`const T&`参数，另一个版本接受一个`T&&`参数（*T*为类型）。
+如果一个成员函数同时提供拷贝和移动版本，区分移动和拷贝的重载函数通常有一个版本接受一个const的左值引用`const T&`参数，另一个版本接受一个指向非const的右值引用`T&&`参数（*T*为类型）。
 
 ```c++
-void push_back(const X&);   // copy: binds to any kind of X
-void push_back(X&&);        // move: binds only to modifiable rvalues of type X
+void push_back(const X&);   // copy: binds to any kind of X 能绑定到任何类型
+void push_back(X&&);        // move: binds only to modifiable rvalues of type X 只能绑定到类型为X的可修改的右值（对于非const的右值是精确匹配的）
+
+// 一般而言：不需要const X&&（希望从实参窃取数据，const与之矛盾）  或 X&（从一个对象进行拷贝不应该改变该对象，需要const） 为参数
 ```
 
 有时可以对右值赋值：
