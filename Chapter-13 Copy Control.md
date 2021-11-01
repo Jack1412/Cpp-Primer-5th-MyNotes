@@ -722,16 +722,14 @@ void push_back(X&&);        // move: binds only to modifiable rvalues of type X 
 // 一般而言：不需要const X&&（希望从实参窃取数据，const与之矛盾）  或 X&（从一个对象进行拷贝不应该改变该对象，需要const） 为参数
 ```
 
-有时可以对右值赋值：
+**右值和左值引用成员函数**：在旧标准中，没有办法阻止这种使用方式。为了维持向下兼容性，新标准库仍然允许向右值赋值。但是可以在自己的类中阻止这种行为，规定左侧运算对象（即`this`指向的对象）必须是一个左值。
 
 ```c++
 string s1, s2;
 s1 + s2 = "wow!";
 ```
 
-在旧标准中，没有办法阻止这种使用方式。为了维持向下兼容性，新标准库仍然允许向右值赋值。但是可以在自己的类中阻止这种行为，规定左侧运算对象（即`this`指向的对象）必须是一个左值。
-
-在非`static`成员函数的形参列表后面添加引用限定符（reference qualifier）可以指定`this`的左值/右值属性。引用限定符可以是`&`或者`&&`，分别表示`this`可以指向一个左值或右值对象。引用限定符必须同时出现在函数的声明和定义中。
+在非`static`成员函数的形参列表后面添加**引用限定符**（reference qualifier）可以<u>指定`this`的左值/右值属性</u>。引用限定符可以是`&`或者`&&`，分别表示`this`可以指向一个左值或右值对象。<u>引用限定符必须同时出现在函数的声明和定义中。</u>
 
 ```c++
 class Foo
@@ -748,7 +746,7 @@ Foo &Foo::operator=(const Foo &rhs) &
 }
 ```
 
-一个非`static`成员函数可以同时使用`const`和引用限定符，此时引用限定符跟在`const`限定符之后。
+一个非`static`成员函数可以同时使用`const`和引用限定符，此时<u>`引用限定符跟`在`const`限定符之后</u>。
 
 ```c++
 class Foo
@@ -767,7 +765,24 @@ class Foo
 public:
     Foo sorted() &&;        // may run on modifiable rvalues
     Foo sorted() const &;   // may run on any kind of Foo
+private:
+    vector<int> data;
 };
+
+// *this 是一个暂时量，是右值，意味着没有其他用户，可以直接改变对象，原址排序
+Foo Foo::sorted() && 
+{
+    sort(data.begin(), data.end());
+    return *this;
+}
+
+// *this 是const 左值，不能对其进行原址
+Foo Foo::sorted() const &  
+{
+    Foo ret(*this);  // 拷贝一个副本
+    sort(ret.data.begin(), ret.data.end());
+    return *this;
+}
 
 retVal().sorted();   // retVal() is an rvalue, calls Foo::sorted() &&
 retFoo().sorted();   // retFoo() is an lvalue, calls Foo::sorted() const &
@@ -779,6 +794,7 @@ retFoo().sorted();   // retFoo() is an lvalue, calls Foo::sorted() const &
 class Foo
 {
 public:
+    // 对于具有相同名字和参数列表的成员函数，必须对所有函数都加上引用限定符，后者所有都不加
     Foo sorted() &&;
     Foo sorted() const;    // error: must have reference qualifier
     // Comp is type alias for the function type
