@@ -1,6 +1,6 @@
 # 《C++ Primer中文版（第5版）》笔记
 
-![Cover](Cover.png)
+![Cover](Images/Cover.png)
 
 ## 目录
 
@@ -18,7 +18,7 @@
 
 第6章 函数
 
-第7章 类
+[第7章 类](Notes/Chapter-7 Classes.md)
 
 ### 第II部分 C++标准库
 
@@ -34,11 +34,11 @@
 
 ### 第III部分 类设计者的工具
 
-第13章 拷贝控制
+[第13章 拷贝控制](Notes/Chapter-13 Copy Control.md)
 
 第14章 操作重载与类型转换
 
-第15章 面向对象程序设计
+[第15章 面向对象程序设计](Notes/Chapter-15 Object-Oriented Programming.md)
 
 第16章 模板与泛型编程
 
@@ -52,7 +52,7 @@
 
 ## 关于
 
-***GitHub***：
+本项目基于【Cpp-Primer-5th-Notes-CN]】https://github.com/czs108/Cpp-Primer-5th-Notes-CN，在该笔记基础上，结合个人看书理解，增添删改部分内容。
 
 ***E-Mail***：295326665@qq.com
 
