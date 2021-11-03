@@ -38,7 +38,7 @@
 
 第14章 操作重载与类型转换
 
-[第15章 面向对象程序设计](Notes/Chapter-15 Object-Oriented Programming.md)
+[第15章 面向对象程序设计](https://github.com/Jack1412/Cpp-Primer-5th-MyNotes/blob/master/Notes/Chapter-15%20Object-Oriented%20Programming.md)
 
 第16章 模板与泛型编程
 
@@ -52,7 +52,9 @@
 
 ## 关于
 
-本项目基于【Cpp-Primer-5th-Notes-CN]】https://github.com/czs108/Cpp-Primer-5th-Notes-CN，在该笔记基础上，结合个人看书理解，增添删改部分内容。
+本项目基于【Cpp-Primer-5th-Notes-CN】，在该笔记基础上，结合个人看书理解，增添删改部分内容。
+
+参考项目链接：https://github.com/czs108/Cpp-Primer-5th-Notes-CN
 
 ***E-Mail***：295326665@qq.com
 
