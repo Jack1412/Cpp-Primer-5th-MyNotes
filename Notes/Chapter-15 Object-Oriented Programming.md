@@ -1,12 +1,12 @@
 # 第15章 面向对象程序设计
 
-## OOP：概述（OOP：An Overview）
+## 1. OOP：概述（OOP：An Overview）
 
-面向对象程序设计（object-oriented programming）的核心思想是数据抽象（封装）、继承和动态绑定（多态）。
+面向对象程序设计（object-oriented programming）的核心思想是**数据抽象**（封装）、继承和**动态绑定**（多态）。
 
-通过继承（inheritance）联系在一起的类构成一种层次关系。通常在层次关系的根部有一个基类（base class），其他类则直接或间接地从基类继承而来，这些继承得到的类叫做派生类（derived class）。基类负责定义在层次关系中所有类共同拥有的成员，而每个派生类定义各自特有的成员。
+通过继承（inheritance）联系在一起的类构成一种层次关系。通常在层次关系的根部有一个**基类**（base class），其他类则直接或间接地从基类继承而来，这些继承得到的类叫做**派生类**（derived class）。<u>基类负责定义在层次关系中所有类共同拥有的成员，而每个派生类定义各自特有的成员</u>。
 
-对于某些函数，基类希望它的派生类各自定义适合自身的版本，此时基类应该将这些函数声明为虚函数（virtual function）。方法是在函数名称前添加`virtual`关键字。
+**继承**：基类将 “类型相关的函数” 与 “派生类不作改变直接继承的函数” 区别对待。对于某些函数，基类希望它的派生类各自定义适合自身的版本，此时基类应该将这些函数声明为**虚函数**（virtual function）。方法是在函数名称前添加`virtual`关键字。
 
 ```C++
 class Quote
@@ -23,35 +23,97 @@ public:
 class Bulk_quote : public Quote
 { // Bulk_quote inherits from Quote
 public:
-    double net_price(std::size_t) const override;
+    double net_price(std::size_t) const override; 
 };
 ```
 
-派生类必须在其内部对所有重新定义的虚函数进行声明。
+派生类必须在其内部对所有重新定义的虚函数进行声明，对于`virtual`关键字可加可不加。
 
-使用基类的引用或指针调用一个虚函数时将发生动态绑定（dynamic binding），也叫运行时绑定（run-time binding）。函数的运行版本将由实参决定。
+c++允许派生类显示地注明将使用哪个函数改写基类的虚函数，方法是在形参列表后加`override`关键字
 
-## 定义基类和派生类（Defining Base and Derived Classes）
+**动态绑定**：使用基类的引用或指针调用一个虚函数时将发生动态绑定（dynamic binding），也叫运行时绑定（run-time binding）。函数的运行版本将由实参决定。
 
-### 定义基类（Defining a Base Class）
+```c++
+double print_total(ostream &os, 
+                   const Quote &item, size_t n)
+{
+	// 根据传入item的对象类型选择调用Quote::net_price 还是 Bulk_quote::net_price
+	double ret = item.net_price(n); 
+    os << "ISBN: " << item.isbn() // calls Quote::isbn
+       << " # sold: " << n << " total due: " << ret << endl;
+ 	return ret;
+}
+```
 
-基类通常都应该定义一个虚析构函数，即使该函数不执行任何实际操作也是如此。
+## 2. 定义基类和派生类（Defining Base and Derived Classes）
 
-除构造函数之外的任何非静态函数都能定义为虚函数。`virtual`关键字只能出现在类内部的声明语句之前而不能用于类外部的函数定义。如果基类把一个函数声明为虚函数，则该函数在派生类中隐式地也是虚函数。
+### 2.1 定义基类（Defining a Base Class）
 
-成员函数如果没有被声明为虚函数，则其解析过程发生在编译阶段而非运行阶段。
+```c++
+class Quote {
+public:
+	Quote() = default;
+    Quote(const std::string &book, double sales_price):
+                     bookNo(book), price(sales_price) { }
+
+    // 虚析构函数
+	// 基类通常都应该定义一个虚析构函数，即使该函数不执行任何实际操作也是如此。
+    virtual ~Quote() { } // dynamic binding for the destructor
+    std::string isbn() const { return bookNo; }
+
+    // returns the total sales price for the specified number of items
+    // derived classes will override and apply different discount algorithms
+    virtual double net_price(std::size_t n) const 
+               { return n * price; }
+	// 派生类不能访问私有成员
+private:
+    std::string bookNo; // ISBN number of this item
+    // 派生类可以访问受保护成员，但其他用户不能方位
+protected:
+    double price;       // normal, undiscounted price
+};
+```
+
+基类将两种成员函数分开：一种是基类希望派生类进行覆盖的函数，一种是基类希望派生类直接继承不作改变的函数；对于前者，可定义为虚函数，当使用对象的指针或者引用调用虚函数时，调用将被动态绑定。
+
+- 除构造函数之外的任何非静态函数都能定义为虚函数
+- `virtual`关键字只能出现在类内部的声明语句之前而不能用于类外部的函数定义
+- 如果基类把一个函数声明为虚函数，则该函数在派生类中隐式地也是虚函数
+- 成员函数如果没有被声明为虚函数，则其解析过程发生在编译阶段而非运行阶段（动态绑定发生在运行阶段）
+
 
 派生类能访问基类的公有成员，不能访问私有成员。如果基类希望定义外部代码无法访问，但是派生类对象可以访问的成员，可以使用受保护的（protected）访问运算符进行说明。
 
-### 定义派生类（Defining a Derived Class）
+### 2.2 定义派生类（Defining a Derived Class）
 
-类派生列表中的访问说明符用于控制派生类从基类继承而来的成员是否对派生类的用户可见。
+```c++
+// 继承权限：类派生列表中的访问说明符用于控制派生类从基类继承而来的成员是否对派生类的用户可见。public表示能将公有派生类型的对象绑定到基类的引用或指针上，派生类可以访问基类的公有成员和受保护成员
+class Disc_quote : public Quote {
+public:
+    // other members as before
+    Disc_quote() = default;
+    Disc_quote(const std::string& book, double price,
+              std::size_t qty, double disc):
+                 Quote(book, price),quantity(qty), discount(disc) { }
+	// 
+    double net_price(std::size_t) const = 0;
+protected:
+    std::size_t quantity; // purchase size for the discount to apply
+    double discount;      // fractional discount to apply
+};
+```
 
-如果派生类没有覆盖其基类的某个虚函数，则该虚函数的行为类似于其他的普通函数，派生类会直接继承其在基类中的版本。
+**派生类中的虚函数**：
 
-C++标准并没有明确规定派生类的对象在内存中如何分布，一个对象中继承自基类的部分和派生类自定义的部分不一定是连续存储的。
+- 派生类必须重新声明基类的虚函数，是否写`virtual`关键字并无要求
+- 派生类可以不定义(覆盖)基类的虚函数，则该虚函数的行为类似于其他的普通函数，派生类会直接继承其在基类中的版本。
+- 派生类在函数形参列表后增加`override`关键字，显示地注明哪个函数改写基类的虚函数
 
-因为在派生类对象中含有与其基类对应的组成部分，所以能把派生类的对象当作基类对象来使用，也能将基类的指针或引用绑定到派生类对象中的基类部分上。这种转换通常称为派生类到基类的（derived-to-base）类型转换，编译器会隐式执行。
+**派生类对象 && 派生类向基类的类型转换**：
+
+派生类对象包含多个子对象：派生类自己定义的(非静态)成员的子对象、继承的基类对应的子对象。各个子对象的内存分布不一定连续。【C++标准并没有明确规定派生类的对象在内存中如何分布，一个对象中继承自基类的部分和派生类自定义的部分不一定是连续存储的】
+
+因为在派生类对象中含有与其基类对应的组成部分，所以能把派生类的对象当作基类对象来使用，也能<u>将基类的指针或引用绑定到派生类对象中的基类部分上</u>。这种转换通常称为**派生类到基类的（derived-to-base）类型转换**，编译器会<u>隐式执行</u>。
 
 ```c++
 Quote item;         // object of base type
@@ -61,7 +123,11 @@ p = &bulk;          // p points to the Quote part of bulk
 Quote &r = bulk;    // r bound to the Quote part of bulk
 ```
 
-每个类控制它自己的成员初始化过程，派生类必须使用基类的构造函数来初始化它的基类部分。派生类的构造函数通过构造函数初始化列表来将实参传递给基类构造函数。
+**派生类对象的构造**：
+
+1. 每个类控制它自己的成员初始化过程
+2. 派生类不能直接初始化基类成员，派生类必须使用基类的构造函数来初始化它的基类部分。
+3. 派生类的构造函数通过构造函数初始化列表来将实参传递给基类构造函数。
 
 ```c++
 Bulk_quote(const std::string& book, double p, 
@@ -69,15 +135,34 @@ Bulk_quote(const std::string& book, double p,
     Quote(book, p), min_qty(qty), discount(disc) { }
 ```
 
-除非特别指出，否则派生类对象的基类部分会像数据成员一样执行默认初始化。
+除非特别指出，否则派生类对象的基类部分会像数据成员一样执行默认初始化。？？？
 
 派生类初始化时首先初始化基类部分，然后按照声明的顺序依次初始化派生类成员。
 
-派生类可以访问基类的公有成员和受保护成员。
+**派生类使用基类成员**：派生类可以访问基类的公有成员和受保护成员（派生类的作用域嵌套在基类的作用域之内）。
 
-如果基类定义了一个静态成员，则在整个继承体系中只存在该成员的唯一定义。如果某静态成员是可访问的，则既能通过基类也能通过派生类使用它。
+**继承与静态成员**：如果基类定义了一个静态成员，则在整个继承体系中只存在该成员的唯一定义。如果某静态成员是可访问的，则既能通过基类也能通过派生类使用它。
 
-已经完整定义的类才能被用作基类。
+```c++
+// 在派生类中访问static成员的方法
+1、基类名::成员名
+
+2、子类名::成员名
+
+3、对象.成员名
+
+4、(this)指针->成员名
+
+5、成员名
+```
+
+**派生类的声明**：
+
+```c++
+class  类名; // 不能包含派生列表
+```
+
+**被用作基类的类**：已经完整定义的类才能被用作基类（隐含：一个类不能派生本身）。
 
 ```c++
 class Base { /* ... */ } ;
@@ -87,7 +172,7 @@ class D2: public D1 { /* ... */ };
 
 *Base*是*D1*的直接基类（direct base），是*D2*的间接基类（indirect base）。最终的派生类将包含它直接基类的子对象以及每个间接基类的子对象。
 
-C++11中，在类名后面添加`final`关键字可以禁止其他类继承它。
+**防止继承的发生**：C++11中，在类名后面添加`final`关键字可以禁止其他类继承它。
 
 ```c++
 class NoDerived final { /* */ };    // NoDerived can't be a base class
@@ -98,15 +183,15 @@ class Bad : NoDerived { /* */ };    // error: NoDerived is final
 class Bad2 : Last { /* */ };        // error: Last is final
 ```
 
-### 类型转换与继承（Conversions and Inheritance）
+### 2.3 类型转换与继承（Conversions and Inheritance）
 
 和内置指针一样，智能指针类也支持派生类到基类的类型转换，所以可以将一个派生类对象的指针存储在一个基类的智能指针内。
 
-表达式的静态类型（static type）在编译时总是已知的，它是变量声明时的类型或表达式生成的类型；动态类型（dynamic type）则是变量或表达式表示的内存中对象的类型，只有运行时才可知。
+表达式的**静态类型**（static type）在编译时总是已知的，它是变量声明时的类型或表达式生成的类型；**动态类型**（dynamic type）则是变量或表达式表示的内存中对象的类型，只有运行时才可知。
 
 如果表达式既不是引用也不是指针，则它的动态类型永远与静态类型一致。
 
-不存在从基类到派生类的隐式类型转换，即使一个基类指针或引用绑定在一个派生类对象上也不行，因为编译器只能通过检查指针或引用的静态类型来判断转换是否合法。
+**不存在从基类到派生类的隐式类型转换**：即使一个基类指针或引用绑定在一个派生类对象上也不行，因为编译器只能通过检查指针或引用的静态类型来判断转换是否合法。
 
 ```c++
 Quote base;
@@ -118,7 +203,9 @@ Bulk_quote& bulkRef = base;  // error: can't convert base to derived
 
 如果已知某个基类到派生类的转换是安全的，可以使用`static_cast`强制覆盖掉编译器的检查工作。
 
-派生类到基类的自动类型转换只对指针或引用有效，在派生类类型和基类类型之间不存在这种转换。
+**在对象之间不存在类型转换**：派生类到基类的自动类型转换只对指针或引用有效，在派生类类型和基类类型之间不存在这种转换。
+
+本质理解：当我们初始化或赋值一个类类型的对象是，实际是在调用某个函数。执行初始化，调用构造函数，执行赋值，调用赋值运算符。由于这些函数接受引用作为参数，所以派生类向基类的转换允许我们给基类的拷贝/移动操作传递一个派生类的对象。
 
 派生类到基类的转换允许我们给基类的拷贝/移动操作传递一个派生类的对象，这些操作是基类定义的，只会处理基类自己的成员，派生类的部分被切掉（sliced down）了。
 
@@ -130,7 +217,7 @@ item = bulk;        // calls Quote::operator=(const Quote&)
 
 用一个派生类对象为一个基类对象初始化或赋值时，只有该对象中的基类部分会被拷贝、移动或赋值，它的派生类部分会被忽略掉。
 
-## 虚函数（Virtual Functions）
+## 3. 虚函数（Virtual Functions）
 
 当且仅当通过指针或引用调用虚函数时，才会在运行过程解析该调用，也只有在这种情况下对象的动态类型有可能与静态类型不同。
 
@@ -186,7 +273,7 @@ double undiscounted = baseP->Quote::net_price(42);
 
 如果一个派生类虚函数需要调用它的基类版本，但没有使用作用域运算符，则在运行时该调用会被解析为对派生类版本自身的调用，从而导致无限递归。
 
-## 抽象基类（Abstract Base Classes）
+## 4. 抽象基类（Abstract Base Classes）
 
 在类内部虚函数声明语句的分号前添加`=0`可以将一个虚函数声明为纯虚（pure virtual）函数。一个纯虚函数无须定义。
 
@@ -204,7 +291,7 @@ double net_price(std::size_t) const = 0;
 
 重构（refactoring）负责重新设计类的体系以便将操作或数据从一个类移动到另一个类中。
 
-## 访问控制与继承（Access Control and Inheritance）
+## 5. 访问控制与继承（Access Control and Inheritance）
 
 一个类可以使用`protected`关键字来声明外部代码无法访问，但是派生类对象可以访问的成员。
 
@@ -296,7 +383,7 @@ protected:
 
 建议显式地声明派生类的继承方式，不要仅仅依赖于默认设置。
 
-## 继承中的类作用域（Class Scope under Inheritance）
+## 6. 继承中的类作用域（Class Scope under Inheritance）
 
 当存在继承关系时，派生类的作用域嵌套在其基类的作用域之内。
 
@@ -368,7 +455,7 @@ public:
 
 类内使用`using`声明改变访问级别的规则同样适用于重载函数的名字。
 
-## 构造函数与拷贝控制（Constructors and Copy Control）
+## 7. 构造函数与拷贝控制（Constructors and Copy Control）
 
 ### 虚析构函数（Virtual Destructors）
 
@@ -487,7 +574,7 @@ public:
 
 当一个基类构造函数含有默认实参时，这些默认值不会被继承。相反，派生类会获得多个继承的构造函数，其中每个构造函数分别省略掉一个含有默认值的形参。
 
-## 容器与继承（Containers and Inheritance）
+## 8. 容器与继承（Containers and Inheritance）
 
 因为容器中不能保存不同类型的元素，所以不能把具有继承关系的多种类型的对象直接存储在容器中。
 

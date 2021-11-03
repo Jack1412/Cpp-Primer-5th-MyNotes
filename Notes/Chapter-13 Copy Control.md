@@ -776,7 +776,7 @@ Foo Foo::sorted() &&
     return *this;
 }
 
-// *this 是const 左值，不能对其进行原址
+// *this 是const 左值，不能对其进行原址排序
 Foo Foo::sorted() const &  
 {
     Foo ret(*this);  // 拷贝一个副本
